@@ -1,0 +1,18 @@
+# Metadata/IDE files
+.DS_Store
+.idea/
+.vscode/
+
+# Build artifacts
+target/
+dist/
+node_modules/
+
+# Files specifically excluded by USER
+insert_data.sql
+LICENSE
+*.svg
+
+# Frontend specifics
+frontend/.vite/
+frontend/dist/
