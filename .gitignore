@@ -1,0 +1,13 @@
+node_modules/
+target/
+.DS_Store
+.idea/
+.vscode/
+
+# Ignore Docker files asked by user
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Ignore humanize script asked by user
+humanize.py
