@@ -4,8 +4,8 @@ import com.reelio.dto.CinematographerDTO;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Collectors;
 
 @Service
 public class AiSearchService {
@@ -13,54 +13,111 @@ public class AiSearchService {
     private final ChatClient chatClient;
     private final CinematographerService cinematographerService;
 
-    public AiSearchService(ChatClient.Builder chatClientBuilder, CinematographerService cinematographerService) {
+    public AiSearchService(ChatClient.Builder chatClientBuilder,
+            CinematographerService cinematographerService) {
         this.chatClient = chatClientBuilder.build();
         this.cinematographerService = cinematographerService;
     }
 
     public List<CinematographerDTO> search(String query) {
-        // Fetch all cinematographers (in a real world scenario, you'd feed this to a RAG pipeline)
+
         List<CinematographerDTO> allCinematographers = cinematographerService.getAllCinematographers();
-        
-        if(allCinematographers.isEmpty()) {
-            return List.of();
+
+        if (allCinematographers.isEmpty()) {
+            return new ArrayList<>();
         }
 
-        // Create a simple prompt to ask Ollama to filter the list
-        StringBuilder promptBuilder = new StringBuilder();
-        promptBuilder.append("You are an assistant for a cinematographer booking platform. Given the user's request and a list of available cinematographers, respond ONLY with a comma-separated list of cinematographer IDs that best match the request. Do not include any other text.\n\n");
-        promptBuilder.append("User Request: ").append(query).append("\n\n");
-        promptBuilder.append("Available Cinematographers (ID - Name - Specialties - City):\n");
-        
+        // -------- STEP 1: Build prompt --------
+        StringBuilder prompt = new StringBuilder();
+
+        prompt.append("Return ONLY comma-separated IDs.\n");
+        prompt.append("User Request: ").append(query).append("\n\n");
+
         for (CinematographerDTO c : allCinematographers) {
-            promptBuilder.append(c.getId()).append(" - ")
-                         .append(c.getName()).append(" - ")
-                         .append(c.getSpecialties() != null ? c.getSpecialties() : "None").append(" - ")
-                         .append(c.getCity() != null ? c.getCity() : "Unknown").append("\n");
+            prompt.append(c.getId()).append(" - ")
+                    .append(c.getName()).append(" - ")
+                    .append(c.getSpecialties()).append(" - ")
+                    .append(c.getCity()).append("\n");
         }
+
+        // -------- STEP 2: Call AI (may return null or empty) --------
+        String aiResponse = null;
 
         try {
-            String aiResponse = chatClient.prompt(promptBuilder.toString()).call().content();
-            
-            // Parse comma-separated IDs
-            String[] idStrings = aiResponse.split(",");
-            return allCinematographers.stream()
-                .filter(c -> {
-                    for (String idStr : idStrings) {
-                        if (idStr.trim().equals(c.getId().toString())) {
-                            return true;
-                        }
-                    }
-                    return false;
-                })
-                .collect(Collectors.toList());
-        } catch (Exception e) {
-            // Fallback: Return all if Ollama is not available or fails
-            System.err.println("AI Search failed, falling back to simple filter: " + e.getMessage());
-            return allCinematographers.stream()
-                .filter(c -> (c.getSpecialties() != null && c.getSpecialties().toLowerCase().contains(query.toLowerCase())) || 
-                             (c.getCity() != null && c.getCity().toLowerCase().contains(query.toLowerCase())))
-                .collect(Collectors.toList());
+            aiResponse = chatClient.prompt(prompt.toString())
+                    .call()
+                    .content();
+        } catch (Exception ignored) {
+            // do nothing (no crash)
         }
+
+        List<CinematographerDTO> result = new ArrayList<>();
+
+        // -------- STEP 3: If AI worked --------
+        if (aiResponse != null && !aiResponse.isEmpty()) {
+
+            String[] ids = aiResponse.split(",");
+
+            for (CinematographerDTO c : allCinematographers) {
+
+                for (String id : ids) {
+
+                    if (id.trim().equals(c.getId().toString())) {
+                        result.add(c);
+                        break;
+                    }
+                }
+            }
+        }
+
+        // -------- STEP 4: Fallback if AI failed --------
+        if (result.isEmpty()) {
+
+            for (CinematographerDTO c : allCinematographers) {
+
+                boolean matchSpecialty = false;
+                boolean matchCity = false;
+
+                if (c.getSpecialties() != null &&
+                        c.getSpecialties().toLowerCase().contains(query.toLowerCase())) {
+                    matchSpecialty = true;
+                }
+
+                if (c.getCity() != null &&
+                        c.getCity().toLowerCase().contains(query.toLowerCase())) {
+                    matchCity = true;
+                }
+
+                if (matchSpecialty || matchCity) {
+                    result.add(c);
+                }
+            }
+        }
+
+        // -------- STEP 5: Summarization --------
+        if (!result.isEmpty()) {
+
+            StringBuilder summaryPrompt = new StringBuilder();
+            summaryPrompt.append("Summarize these cinematographers in 2-3 lines:\n");
+
+            for (CinematographerDTO c : result) {
+                summaryPrompt.append(c.getName()).append(" - ")
+                        .append(c.getSpecialties()).append(" - ")
+                        .append(c.getCity()).append("\n");
+            }
+
+            try {
+                String summary = chatClient.prompt(summaryPrompt.toString())
+                        .call()
+                        .content();
+
+                System.out.println("AI Summary: " + summary);
+
+            } catch (Exception ignored) {
+                System.out.println("Summary not available.");
+            }
+        }
+
+        return result;
     }
 }

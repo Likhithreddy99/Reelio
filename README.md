@@ -24,6 +24,14 @@ The presentation layer handling user experience and client interactions.
 
 ---
 
+## 🤖 AI LLM Integration
+
+Reelio harnesses the power of Large Language Models (LLMs) to provide an intuitive and intelligent search experience. 
+- **Natural Language Search:** Clients can find cinematographers using conversational queries (e.g., "I need someone experienced in drone shots for a wedding").
+- **Spring AI & Ollama:** The backend utilizes Spring AI integrated with local LLMs via Ollama to process natural language, parse intent, and match clients with the best-suited cinematographers based on semantic relevance rather than just keyword matching.
+
+---
+
 ## ✨ Features
 
 - **RBAC Authenticated System:** Distinct user permissions for `CLIENT` and `CINEMATOGRAPHER`.
